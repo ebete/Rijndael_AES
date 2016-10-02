@@ -1,4 +1,5 @@
 import rijndael_sbox
+from random import randint
 
 
 class Rijndael(object):
@@ -42,16 +43,60 @@ class Rijndael(object):
         )
 
     @staticmethod
-    def _initialiseinputbytes(inputstring, blocksize):
+    def _initialiseinputbytes(inputstring, blocksize, padmethod):
         if len(inputstring) < 1:
             return bytearray(blocksize)
         outputbytes = bytearray()
         outputbytes.extend(map(ord, inputstring))
-        padlen = len(outputbytes) % blocksize
-        if padlen == 0:
-            return outputbytes
-        outputbytes = outputbytes.ljust(len(outputbytes) + blocksize - padlen, b'\x00')
+        if padmethod == 0:
+            outputbytes = Rijndael._pad_zeroes(outputbytes, blocksize)
+        elif padmethod == 1:
+            outputbytes = Rijndael._pad_x923(outputbytes, blocksize)
+        elif padmethod == 2:
+            outputbytes = Rijndael._pad_iso10126(outputbytes, blocksize)
+        elif padmethod == 3:
+            outputbytes = Rijndael._pad_pkcs7(outputbytes, blocksize)
         return outputbytes
+
+    @staticmethod
+    def _pad_zeroes(inputbytes, blocksize):
+        padlen = blocksize - (len(inputbytes) % blocksize)
+        if padlen == 0:
+            return inputbytes
+
+        inputbytes = inputbytes.ljust(len(inputbytes)+padlen, b'\x00')
+        return inputbytes
+
+    @staticmethod
+    def _pad_x923(inputbytes, blocksize):
+        padlen = blocksize - (len(inputbytes) % blocksize)
+        if padlen == 0:
+            padlen = blocksize
+
+        inputbytes = inputbytes.ljust(len(inputbytes)+padlen-1, b'\x00')
+        inputbytes.append(padlen)
+        return inputbytes
+
+    @staticmethod
+    def _pad_iso10126(inputbytes, blocksize):
+        padlen = blocksize - (len(inputbytes) % blocksize)
+        if padlen == 0:
+            padlen = blocksize
+
+        for _ in range(padlen-1):
+            inputbytes.append(randint(0, 255))
+        inputbytes.append(padlen)
+        return inputbytes
+
+    @staticmethod
+    def _pad_pkcs7(inputbytes, blocksize):
+        padlen = blocksize - (len(inputbytes) % blocksize)
+        if padlen == 0:
+            padlen = blocksize
+
+        for _ in range(padlen):
+            inputbytes.append(padlen)
+        return inputbytes
 
     def _transformbytestoblocks(self, inputbytes):
         for x in range(0, len(inputbytes), self._state_size):
@@ -60,11 +105,11 @@ class Rijndael(object):
             self._blocks.append(block)
 
     def createdatablocks(self, cryptdata):
-        bytedata = Rijndael._initialiseinputbytes(cryptdata, self._state_size)
+        bytedata = Rijndael._initialiseinputbytes(cryptdata, self._state_size, 3)
         self._transformbytestoblocks(bytedata)
 
     def setencryptionkey(self, enckey):
-        self._enckey = Rijndael._initialiseinputbytes(enckey, self._key_size)
+        self._enckey = Rijndael._initialiseinputbytes(enckey, self._key_size, 0)
         self._keyschedule()
 
     def subbytes(self):
@@ -143,7 +188,7 @@ class Rijndael(object):
             if i % n == 0:
                 t = Rijndael._rotateword(prev_word)
                 t = self._subword(t)
-                t[0] ^= self._rcon(int(i/n))
+                t[0] ^= Rijndael._rcon(int(i/n))
             elif n > 6 and i % n == 4:
                 t = self._subword(t)
             exp_word = Rijndael._xorword(keyback_word, t)
@@ -168,6 +213,9 @@ class Rijndael(object):
             if self._round < self._maxrounds - 1:
                 self.mixcolumns()
             self.addroundkey()
+
+    def decrypt(self):
+        pass
 
     def getcipher(self):
         cipher = bytearray()
