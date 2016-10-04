@@ -19,6 +19,12 @@ def init_sbox():
     return sbox
 
 
+def init_sbox_inverse():
+    sbox = [0 for _ in range(256)]
+
+    return sbox
+
+
 # Rotate bits left. If the most significant bit is 1, the least significant bit will be set to 1.
 def rol(x, shift, size):
     if shift < 0 or shift > size:
@@ -50,6 +56,11 @@ def main():
     assert sbox[0] == 0x63
     assert sbox[1] == 0x7C
     assert sbox[255] == 0x16
+
+    sbox_inv = init_sbox_inverse()
+    assert sbox_inv[0] == 0x52
+    assert sbox_inv[1] == 0x09
+    assert sbox_inv[255] == 0x7D
 
     print("rijndael_sbox: All tests passed.")
 

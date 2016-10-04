@@ -3,7 +3,7 @@ from random import randint
 
 
 class Rijndael(object):
-    def __init__(self, statesize, keysize):
+    def __init__(self, statesize=128, keysize=128):
         # State and cipher key block dimensions.
         if statesize % 64 != 0 or statesize < 128 or statesize > 256:
             raise ValueError("The given state size is invalid.")
@@ -23,6 +23,7 @@ class Rijndael(object):
             self._maxrounds = 12
         self._round = 0
         self._sbox = rijndael_sbox.init_sbox()
+        self._sbox_inv = rijndael_sbox.init_sbox_inverse()
         self._blocks = []
         self._enckey = bytearray()
         self._expkey = bytearray()
@@ -43,7 +44,7 @@ class Rijndael(object):
         )
 
     @staticmethod
-    def _initialiseinputbytes(inputstring, blocksize, padmethod):
+    def _initialiseinputbytes(inputstring, blocksize, padmethod=0):
         if len(inputstring) < 1:
             return bytearray(blocksize)
         outputbytes = bytearray()
@@ -54,7 +55,7 @@ class Rijndael(object):
             outputbytes = Rijndael._pad_x923(outputbytes, blocksize)
         elif padmethod == 2:
             outputbytes = Rijndael._pad_iso10126(outputbytes, blocksize)
-        elif padmethod == 3:
+        else:
             outputbytes = Rijndael._pad_pkcs7(outputbytes, blocksize)
         return outputbytes
 
@@ -116,12 +117,25 @@ class Rijndael(object):
         for block in self._blocks:
             for col in range(block.getcolcount()):
                 for row in range(block.getrowcount()):
-                    block.setcell(row, col, self._sbox[block.getcell(row, col)])
+                    subcell = self._sbox[block.getcell(row, col)]
+                    block.setcell(row, col, subcell)
+
+    def subbytes_inv(self):
+        for block in self._blocks:
+            for col in range(block.getcolcount()):
+                for row in range(block.getrowcount()):
+                    subcell = self._sbox_inv[block.getcell(row, col)]
+                    block.setcell(row, col, subcell)
 
     def shiftrows(self):
         for block in self._blocks:
             for i in range(self._block_rows):
                 block.rotaterowleft(i, i)
+
+    def shiftrow_inv(self):
+        for block in self._blocks:
+            for i in range(self._block_rows):
+                block.rotaterowleft(i, self._block_rows-i)
 
     @staticmethod
     def _galoismultiply(a, b):
@@ -140,10 +154,51 @@ class Rijndael(object):
         for block in range(len(self._blocks)):
             for col in range(self._blocks[block].getcolcount()):
                 orig = self._blocks[block].getcolumn(col)
-                self._blocks[block].setcell(0, col, Rijndael._galoismultiply(0x02, orig[0]) ^ Rijndael._galoismultiply(0x03, orig[1]) ^ orig[2] ^ orig[3])
-                self._blocks[block].setcell(1, col, orig[0] ^ Rijndael._galoismultiply(0x02, orig[1]) ^ Rijndael._galoismultiply(0x03, orig[2]) ^ orig[3])
-                self._blocks[block].setcell(2, col, orig[0] ^ orig[1] ^ Rijndael._galoismultiply(0x02, orig[2]) ^ Rijndael._galoismultiply(0x03, orig[3]))
-                self._blocks[block].setcell(3, col, Rijndael._galoismultiply(0x03, orig[0]) ^ orig[1] ^ orig[2] ^ Rijndael._galoismultiply(0x02, orig[3]))
+                self._blocks[block].setcell(0, col,
+                                            Rijndael._galoismultiply(0x02, orig[0]) ^
+                                            Rijndael._galoismultiply(0x03, orig[1]) ^
+                                            orig[2] ^
+                                            orig[3])
+                self._blocks[block].setcell(1, col,
+                                            orig[0] ^
+                                            Rijndael._galoismultiply(0x02, orig[1]) ^
+                                            Rijndael._galoismultiply(0x03, orig[2]) ^
+                                            orig[3])
+                self._blocks[block].setcell(2, col,
+                                            orig[0] ^
+                                            orig[1] ^
+                                            Rijndael._galoismultiply(0x02, orig[2]) ^
+                                            Rijndael._galoismultiply(0x03, orig[3]))
+                self._blocks[block].setcell(3, col,
+                                            Rijndael._galoismultiply(0x03, orig[0]) ^
+                                            orig[1] ^
+                                            orig[2] ^
+                                            Rijndael._galoismultiply(0x02, orig[3]))
+
+    def mixcolumns_inv(self):
+        for block in range(len(self._blocks)):
+            for col in range(self._blocks[block].getcolcount()):
+                orig = self._blocks[block].getcolumn(col)
+                self._blocks[block].setcell(0, col,
+                                            Rijndael._galoismultiply(0x0e, orig[0]) ^
+                                            Rijndael._galoismultiply(0x0b, orig[1]) ^
+                                            Rijndael._galoismultiply(0x0d, orig[2]) ^
+                                            Rijndael._galoismultiply(0x09, orig[3]))
+                self._blocks[block].setcell(1, col,
+                                            Rijndael._galoismultiply(0x09, orig[0]) ^
+                                            Rijndael._galoismultiply(0x0e, orig[1]) ^
+                                            Rijndael._galoismultiply(0x0b, orig[2]) ^
+                                            Rijndael._galoismultiply(0x0d, orig[3]))
+                self._blocks[block].setcell(2, col,
+                                            Rijndael._galoismultiply(0x0d, orig[0]) ^
+                                            Rijndael._galoismultiply(0x09, orig[1]) ^
+                                            Rijndael._galoismultiply(0x0e, orig[2]) ^
+                                            Rijndael._galoismultiply(0x0b, orig[3]))
+                self._blocks[block].setcell(3, col,
+                                            Rijndael._galoismultiply(0x0b, orig[0]) ^
+                                            Rijndael._galoismultiply(0x0d, orig[1]) ^
+                                            Rijndael._galoismultiply(0x09, orig[2]) ^
+                                            Rijndael._galoismultiply(0x0e, orig[3]))
 
     @staticmethod
     def _rcon(idx):
@@ -195,27 +250,36 @@ class Rijndael(object):
 
             self._expkey[i*4:(i+1)*4] = exp_word
 
-    def addroundkey(self):
-        if self._round >= self._maxrounds:
+    def addroundkey(self, keyround):
+        if keyround >= self._maxrounds:
             raise Exception("No more rounds left to run.")
-        w = self._state_cols*self._round
+        w = self._state_cols*keyround
         roundkey = self._expkey[w*4:(w+self._state_cols)*4]
         for block in self._blocks:
             for col in range(block.getcolcount()):
                 for row in range(block.getrowcount()):
-                    block.setcell(row, col, block.getcell(row, col) ^ roundkey[row+col*block.getrowcount()])
-        self._round += 1
+                    enccell = block.getcell(row, col) ^ roundkey[row + col * block.getrowcount()]
+                    block.setcell(row, col, enccell)
 
     def encrypt(self):
+        self._round = 0
         while self._round < self._maxrounds:
             self.subbytes()
             self.shiftrows()
             if self._round < self._maxrounds - 1:
                 self.mixcolumns()
-            self.addroundkey()
+            self.addroundkey(self._round)
+            self._round += 1
 
     def decrypt(self):
-        pass
+        self._round = self._maxrounds-1
+        while self._round >= 0:
+            self.addroundkey(self._round)
+            if self._round <= 0:
+                self.mixcolumns_inv()
+            self.shiftrow_inv()
+            self.subbytes_inv()
+            self._round -= 1
 
     def getcipher(self):
         cipher = bytearray()
