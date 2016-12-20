@@ -44,22 +44,6 @@ class Rijndael(object):
         )
 
     @staticmethod
-    def _initialiseinputbytes(inputstring, blocksize, padmethod=0):
-        if len(inputstring) < 1:
-            return bytearray(blocksize)
-        outputbytes = bytearray()
-        outputbytes.extend(map(ord, inputstring))
-        if padmethod == 0:
-            outputbytes = Rijndael._pad_zeroes(outputbytes, blocksize)
-        elif padmethod == 1:
-            outputbytes = Rijndael._pad_x923(outputbytes, blocksize)
-        elif padmethod == 2:
-            outputbytes = Rijndael._pad_iso10126(outputbytes, blocksize)
-        else:
-            outputbytes = Rijndael._pad_pkcs7(outputbytes, blocksize)
-        return outputbytes
-
-    @staticmethod
     def _pad_zeroes(inputbytes, blocksize):
         padlen = blocksize - (len(inputbytes) % blocksize)
         if padlen == 0:
@@ -99,18 +83,39 @@ class Rijndael(object):
             inputbytes.append(padlen)
         return inputbytes
 
+    @staticmethod
+    def _initialiseinputbytes(inputbytes, blocksize, padmethod=3):
+        if padmethod == 0:
+            outputbytes = Rijndael._pad_zeroes(inputbytes, blocksize)
+        elif padmethod == 1:
+            outputbytes = Rijndael._pad_x923(inputbytes, blocksize)
+        elif padmethod == 2:
+            outputbytes = Rijndael._pad_iso10126(inputbytes, blocksize)
+        else:
+            outputbytes = Rijndael._pad_pkcs7(inputbytes, blocksize)
+        return outputbytes
+
     def _transformbytestoblocks(self, inputbytes):
         for x in range(0, len(inputbytes), self._state_size):
             block = Block(self._state_cols, self._block_rows)
             block.setblockdata(inputbytes[x:x+self._state_size])
             self._blocks.append(block)
 
+    @staticmethod
+    def _stringtobytes(inputstring):
+        outputbytes = bytearray()
+        outputbytes.extend(map(ord, inputstring))
+        return outputbytes
+
     def createdatablocks(self, cryptdata):
-        bytedata = Rijndael._initialiseinputbytes(cryptdata, self._state_size, 3)
-        self._transformbytestoblocks(bytedata)
+        if type(cryptdata) is not bytearray:
+            cryptdata = Rijndael._stringtobytes(cryptdata)
+        cryptdata = Rijndael._initialiseinputbytes(cryptdata, self._state_size)
+        self._transformbytestoblocks(cryptdata)
 
     def setencryptionkey(self, enckey):
-        self._enckey = Rijndael._initialiseinputbytes(enckey, self._key_size, 0)
+        bytedata = Rijndael._stringtobytes(enckey)
+        self._enckey = Rijndael._initialiseinputbytes(bytedata, self._key_size, 0)
         self._keyschedule()
 
     def subbytes(self):
@@ -428,7 +433,7 @@ def main():
         print(txt)
 
     for i in range(cryptoprovider._maxrounds):
-        cryptoprovider.addroundkey()
+        cryptoprovider.addroundkey(i)
     printcryptoblocks(cryptoprovider)
 
     print("Rijndael (Rijndael): All tests passed.")

@@ -19,10 +19,19 @@ def main(argv):
 
     cryptoprovider = Rijndael(statesize, keysize)
     cryptoprovider.createdatablocks(plaintext)
+    encdata = cryptoprovider.getcipher()
+    print("Plaintext string:")
+    print(base64.b64encode(encdata).decode('ascii'))
+
     cryptoprovider.setencryptionkey(secret)
     cryptoprovider.encrypt()
     encdata = cryptoprovider.getcipher()
+    print("Encrypted string:")
+    print(base64.b64encode(encdata).decode('ascii'))
 
+    cryptoprovider.decrypt()
+    encdata = cryptoprovider.getcipher()
+    print("Decrypted string:")
     print(base64.b64encode(encdata).decode('ascii'))
 
 
