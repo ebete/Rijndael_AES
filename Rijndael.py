@@ -45,7 +45,7 @@ class Rijndael(object):
 
     @staticmethod
     def _pad_zeroes(inputbytes, blocksize):
-        padlen = blocksize - (len(inputbytes) % blocksize)
+        padlen = blocksize - (len(inputbytes) % (blocksize+1))
         if padlen == 0:
             return inputbytes
 
@@ -55,8 +55,6 @@ class Rijndael(object):
     @staticmethod
     def _pad_x923(inputbytes, blocksize):
         padlen = blocksize - (len(inputbytes) % blocksize)
-        if padlen == 0:
-            padlen = blocksize
 
         inputbytes = inputbytes.ljust(len(inputbytes)+padlen-1, b'\x00')
         inputbytes.append(padlen)
@@ -65,8 +63,6 @@ class Rijndael(object):
     @staticmethod
     def _pad_iso10126(inputbytes, blocksize):
         padlen = blocksize - (len(inputbytes) % blocksize)
-        if padlen == 0:
-            padlen = blocksize
 
         for _ in range(padlen-1):
             inputbytes.append(randint(0, 255))
@@ -76,8 +72,6 @@ class Rijndael(object):
     @staticmethod
     def _pad_pkcs7(inputbytes, blocksize):
         padlen = blocksize - (len(inputbytes) % blocksize)
-        if padlen == 0:
-            padlen = blocksize
 
         for _ in range(padlen):
             inputbytes.append(padlen)
@@ -110,12 +104,13 @@ class Rijndael(object):
     def createdatablocks(self, cryptdata):
         if type(cryptdata) is not bytearray:
             cryptdata = Rijndael._stringtobytes(cryptdata)
-        cryptdata = Rijndael._initialiseinputbytes(cryptdata, self._state_size)
+        cryptdata = Rijndael._initialiseinputbytes(cryptdata, self._state_size, 0)
         self._transformbytestoblocks(cryptdata)
 
     def setencryptionkey(self, enckey):
-        bytedata = Rijndael._stringtobytes(enckey)
-        self._enckey = Rijndael._initialiseinputbytes(bytedata, self._key_size, 0)
+        if type(enckey) is not bytearray:
+            enckey = Rijndael._stringtobytes(enckey)
+        self._enckey = Rijndael._initialiseinputbytes(enckey, self._key_size, 0)
         self._keyschedule()
 
     def subbytes(self):
@@ -137,7 +132,7 @@ class Rijndael(object):
             for i in range(self._block_rows):
                 block.rotaterowleft(i, i)
 
-    def shiftrow_inv(self):
+    def shiftrows_inv(self):
         for block in self._blocks:
             for i in range(self._block_rows):
                 block.rotaterowleft(i, self._block_rows-i)
@@ -282,7 +277,7 @@ class Rijndael(object):
             self.addroundkey(self._round)
             if self._round <= 0:
                 self.mixcolumns_inv()
-            self.shiftrow_inv()
+            self.shiftrows_inv()
             self.subbytes_inv()
             self._round -= 1
 
@@ -400,28 +395,18 @@ def main():
     assert block.getcell(0, 0) == ord('x')
     print("Rijndael (Block): All tests passed.")
 
-    cryptoprovider = Rijndael(256, 128)
-    cryptoprovider.setencryptionkey("")
-    plaintext = "Hello, world! This."
-    print("\nPlaintext:", plaintext)
-    cryptoprovider.createdatablocks(plaintext)
-    printcryptoblocks(cryptoprovider)
-    cryptoprovider.subbytes()
-    print("SubBytes step:")
-    printcryptoblocks(cryptoprovider)
-    cryptoprovider.shiftrows()
-    print("ShiftRows step:")
-    printcryptoblocks(cryptoprovider)
-    cryptoprovider.mixcolumns()
-    print("MixColumns step:")
-    assert Rijndael._galoismultiply(0x53, 0xCA) == 0x01
-    printcryptoblocks(cryptoprovider)
-    print("AddRoundKey step:")
     assert Rijndael._rcon(4) == 0x08
     assert Rijndael._rcon(255) == 0x8D
-    cryptoprovider._enckey = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F"
-    cryptoprovider._keyschedule()
+    assert Rijndael._galoismultiply(0x53, 0xCA) == 0x01
 
+    ba = bytearray(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F")
+    cryptoprovider = Rijndael(128, 128)
+    cryptoprovider.setencryptionkey(ba)
+    cryptoprovider.createdatablocks(ba)
+
+    print("\nInitialisation state (blocks/padding/keystate):")
+    print("Data:")
+    printcryptoblocks(cryptoprovider)
     print("Key:")
     for i in range(len(cryptoprovider._enckey)):
         print("{:#04x} ".format(cryptoprovider._enckey[i]), end="")
@@ -431,16 +416,50 @@ def main():
         for j in range(16):
             txt += "{:#04x} ".format(cryptoprovider._expkey[i*16+j])
         print(txt)
+    print()
 
-    for i in range(cryptoprovider._maxrounds):
-        cryptoprovider.addroundkey(i)
+    print("SubBytes step:")
+    assertdata = cryptoprovider._blocks[0]._blockdata
+    cryptoprovider.subbytes()
     printcryptoblocks(cryptoprovider)
+    print("SubBytes_inv step:")
+    cryptoprovider.subbytes_inv()
+    printcryptoblocks(cryptoprovider)
+    assert cryptoprovider._blocks[0]._blockdata == assertdata
+
+    print("ShiftRows step:")
+    assertdata = cryptoprovider._blocks[0]._blockdata
+    cryptoprovider.shiftrows()
+    printcryptoblocks(cryptoprovider)
+    print("ShiftRows_inv step:")
+    cryptoprovider.shiftrows_inv()
+    printcryptoblocks(cryptoprovider)
+    assert cryptoprovider._blocks[0]._blockdata == assertdata
+
+    print("MixColumns step:")
+    assertdata = cryptoprovider._blocks[0]._blockdata
+    cryptoprovider.mixcolumns()
+    printcryptoblocks(cryptoprovider)
+    print("MixColumns_inv step:")
+    cryptoprovider.mixcolumns_inv()
+    printcryptoblocks(cryptoprovider)
+    assert cryptoprovider._blocks[0]._blockdata == assertdata
+
+    print("AddRoundKey step:")
+    assertdata = cryptoprovider._blocks[0]._blockdata
+    cryptoprovider.addroundkey(0)
+    cryptoprovider._round += 1
+    printcryptoblocks(cryptoprovider)
+    print("AddRoundKey_inv step:")
+    cryptoprovider.addroundkey(0)
+    cryptoprovider._round -= 1
+    printcryptoblocks(cryptoprovider)
+    assert cryptoprovider._blocks[0]._blockdata == assertdata
 
     print("Rijndael (Rijndael): All tests passed.")
 
 
 def printcryptoblocks(cp):
-    print("\nCurrent state of the datablocks:")
     print(repr(cp))
     for block in cp._blocks:
         print(repr(block))
