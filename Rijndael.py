@@ -231,7 +231,7 @@ class Rijndael(object):
 
     def _keyschedule(self):
         n = self._key_cols                            # 32-bit words in original key.
-        b = (self._lastround + 1) * self._state_cols  # 32-bit words in generated key schedule.
+        b = (self._lastround + 2) * self._state_cols  # 32-bit words in generated key schedule.
         self._expkey = bytearray(b*4)
         self._expkey[:n*4] = self._enckey[:n*4]
 
