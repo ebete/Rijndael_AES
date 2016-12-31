@@ -113,26 +113,26 @@ class Rijndael(object):
         self._enckey = Rijndael._initialiseinputbytes(enckey, self._key_size, 0)
         self._keyschedule()
 
-    def subbytes(self):
+    def _subbytes(self):
         for block in self._blocks:
             for col in range(block.getcolcount()):
                 for row in range(block.getrowcount()):
                     subcell = self._sbox[block.getcell(row, col)]
                     block.setcell(row, col, subcell)
 
-    def subbytes_inv(self):
+    def _subbytes_inv(self):
         for block in self._blocks:
             for col in range(block.getcolcount()):
                 for row in range(block.getrowcount()):
                     subcell = self._sbox_inv[block.getcell(row, col)]
                     block.setcell(row, col, subcell)
 
-    def shiftrows(self):
+    def _shiftrows(self):
         for block in self._blocks:
             for i in range(self._block_rows):
                 block.rotaterowleft(i, i)
 
-    def shiftrows_inv(self):
+    def _shiftrows_inv(self):
         for block in self._blocks:
             for i in range(self._block_rows):
                 block.rotaterowleft(i, self._block_rows-i)
@@ -150,7 +150,7 @@ class Rijndael(object):
             b >>= 1
         return p
 
-    def mixcolumns(self):
+    def _mixcolumns(self):
         for block in range(len(self._blocks)):
             for col in range(self._blocks[block].getcolcount()):
                 orig = self._blocks[block].getcolumn(col)
@@ -175,7 +175,7 @@ class Rijndael(object):
                                             orig[2] ^
                                             Rijndael._galoismultiply(0x02, orig[3]))
 
-    def mixcolumns_inv(self):
+    def _mixcolumns_inv(self):
         for block in range(len(self._blocks)):
             for col in range(self._blocks[block].getcolcount()):
                 orig = self._blocks[block].getcolumn(col)
@@ -225,10 +225,6 @@ class Rijndael(object):
             word1[i] ^= word2[i]
         return word1
 
-    @staticmethod
-    def _keyexpansion(a):
-        pass
-
     def _keyschedule(self):
         n = self._key_cols                            # 32-bit words in original key.
         b = (self._lastround + 2) * self._state_cols  # 32-bit words in generated key schedule.
@@ -250,7 +246,7 @@ class Rijndael(object):
 
             self._expkey[i*4:(i+1)*4] = exp_word
 
-    def addroundkey(self, keyround):
+    def _addroundkey(self, keyround):
         if keyround > self._lastround:
             raise Exception("No more rounds left to run.")
         w = self._state_cols*keyround
@@ -264,22 +260,22 @@ class Rijndael(object):
     def encrypt(self):
         self._round = 0
         while self._round <= self._lastround:
-            self.subbytes()
-            self.shiftrows()
+            self._subbytes()
+            self._shiftrows()
             if self._round < self._lastround:
-                self.mixcolumns()
-            self.addroundkey(self._round)
+                self._mixcolumns()
+            self._addroundkey(self._round)
             self._round += 1
         self._round -= 1
 
     def decrypt(self):
         self._round = self._lastround
         while self._round >= 0:
-            self.addroundkey(self._round)
+            self._addroundkey(self._round)
             if self._round < self._lastround:
-                self.mixcolumns_inv()
-            self.shiftrows_inv()
-            self.subbytes_inv()
+                self._mixcolumns_inv()
+            self._shiftrows_inv()
+            self._subbytes_inv()
             self._round -= 1
         self._round += 1
 
@@ -424,38 +420,38 @@ def main():
 
     print("SubBytes step:")
     assertdata = cryptoprovider._blocks[0]._blockdata
-    cryptoprovider.subbytes()
+    cryptoprovider._subbytes()
     printcryptoblocks(cryptoprovider)
     print("SubBytes_inv step:")
-    cryptoprovider.subbytes_inv()
+    cryptoprovider._subbytes_inv()
     printcryptoblocks(cryptoprovider)
     assert cryptoprovider._blocks[0]._blockdata == assertdata
 
     print("ShiftRows step:")
     assertdata = cryptoprovider._blocks[0]._blockdata
-    cryptoprovider.shiftrows()
+    cryptoprovider._shiftrows()
     printcryptoblocks(cryptoprovider)
     print("ShiftRows_inv step:")
-    cryptoprovider.shiftrows_inv()
+    cryptoprovider._shiftrows_inv()
     printcryptoblocks(cryptoprovider)
     assert cryptoprovider._blocks[0]._blockdata == assertdata
 
     print("MixColumns step:")
     assertdata = cryptoprovider._blocks[0]._blockdata
-    cryptoprovider.mixcolumns()
+    cryptoprovider._mixcolumns()
     printcryptoblocks(cryptoprovider)
     print("MixColumns_inv step:")
-    cryptoprovider.mixcolumns_inv()
+    cryptoprovider._mixcolumns_inv()
     printcryptoblocks(cryptoprovider)
     assert cryptoprovider._blocks[0]._blockdata == assertdata
 
     print("AddRoundKey step:")
     assertdata = cryptoprovider._blocks[0]._blockdata
-    cryptoprovider.addroundkey(0)
+    cryptoprovider._addroundkey(0)
     cryptoprovider._round += 1
     printcryptoblocks(cryptoprovider)
     print("AddRoundKey_inv step:")
-    cryptoprovider.addroundkey(0)
+    cryptoprovider._addroundkey(0)
     cryptoprovider._round -= 1
     printcryptoblocks(cryptoprovider)
     assert cryptoprovider._blocks[0]._blockdata == assertdata
