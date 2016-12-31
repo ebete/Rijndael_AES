@@ -16,11 +16,11 @@ class Rijndael(object):
         self._key_cols = int(keysize / 8 / self._block_rows)
         self._key_size = self._key_cols * self._block_rows
 
-        self._maxrounds = 10
+        self._lastround = 9
         if keysize >= 256 or statesize >= 256:
-            self._maxrounds = 14
+            self._lastround = 13
         elif keysize >= 192 or statesize >= 192:
-            self._maxrounds = 12
+            self._lastround = 11
         self._round = 0
         self._sbox = rijndael_sbox.init_sbox()
         self._sbox_inv = rijndael_sbox.init_sbox_inverse()
@@ -39,8 +39,8 @@ class Rijndael(object):
             self._key_cols,
             self._key_size,
             len(self._blocks),
-            self._round,
-            self._maxrounds
+            self._round+1,
+            self._lastround+1
         )
 
     @staticmethod
@@ -231,7 +231,7 @@ class Rijndael(object):
 
     def _keyschedule(self):
         n = self._key_cols                            # 32-bit words in original key.
-        b = (self._maxrounds + 1) * self._state_cols  # 32-bit words in generated key schedule.
+        b = (self._lastround + 1) * self._state_cols  # 32-bit words in generated key schedule.
         self._expkey = bytearray(b*4)
         self._expkey[:n*4] = self._enckey[:n*4]
 
@@ -251,7 +251,7 @@ class Rijndael(object):
             self._expkey[i*4:(i+1)*4] = exp_word
 
     def addroundkey(self, keyround):
-        if keyround >= self._maxrounds:
+        if keyround > self._lastround:
             raise Exception("No more rounds left to run.")
         w = self._state_cols*keyround
         roundkey = self._expkey[w*4:(w+self._state_cols)*4]
@@ -263,23 +263,25 @@ class Rijndael(object):
 
     def encrypt(self):
         self._round = 0
-        while self._round < self._maxrounds:
+        while self._round <= self._lastround:
             self.subbytes()
             self.shiftrows()
-            if self._round < self._maxrounds - 1:
+            if self._round < self._lastround:
                 self.mixcolumns()
             self.addroundkey(self._round)
             self._round += 1
+        self._round -= 1
 
     def decrypt(self):
-        self._round = self._maxrounds-1
-        while self._round > 0:
+        self._round = self._lastround
+        while self._round >= 0:
             self.addroundkey(self._round)
-            if self._round <= 0:
+            if self._round < self._lastround:
                 self.mixcolumns_inv()
             self.shiftrows_inv()
             self.subbytes_inv()
             self._round -= 1
+        self._round += 1
 
     def getcipher(self):
         cipher = bytearray()
