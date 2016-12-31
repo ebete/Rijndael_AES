@@ -26,6 +26,8 @@ def main():
     statesize = args.state_size
     keysize = args.key_size
     mode_decrypt = args.decrypt
+    if mode_decrypt:
+        plaintext = bytearray(base64.b64decode(plaintext, validate=True))
 
     cryptoprovider = Rijndael(statesize, keysize)
     cryptoprovider.createdatablocks(plaintext)
@@ -35,7 +37,10 @@ def main():
     else:
         cryptoprovider.encrypt()
     encdata = cryptoprovider.getcipher()
-    print(base64.b64encode(encdata).decode('ascii'))
+    if mode_decrypt:
+        print(encdata.decode('ascii'))
+    else:
+        print(base64.b64encode(encdata).decode('ascii'))
 
 
 if __name__ == '__main__':
