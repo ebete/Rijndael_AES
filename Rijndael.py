@@ -45,8 +45,8 @@ class Rijndael(object):
 
     @staticmethod
     def _pad_zeroes(inputbytes, blocksize):
-        padlen = blocksize - (len(inputbytes) % (blocksize+1))
-        if padlen == 0:
+        padlen = blocksize - (len(inputbytes) % blocksize)
+        if padlen == blocksize and len(inputbytes) > 0:
             return inputbytes
 
         inputbytes = inputbytes.ljust(len(inputbytes)+padlen, b'\x00')
@@ -273,7 +273,7 @@ class Rijndael(object):
 
     def decrypt(self):
         self._round = self._maxrounds-1
-        while self._round >= 0:
+        while self._round > 0:
             self.addroundkey(self._round)
             if self._round <= 0:
                 self.mixcolumns_inv()
@@ -404,6 +404,8 @@ def main():
     cryptoprovider.setencryptionkey(ba)
     cryptoprovider.createdatablocks(ba)
 
+    assert cryptoprovider.getcipher() == ba
+
     print("\nInitialisation state (blocks/padding/keystate):")
     print("Data:")
     printcryptoblocks(cryptoprovider)
@@ -455,6 +457,14 @@ def main():
     cryptoprovider._round -= 1
     printcryptoblocks(cryptoprovider)
     assert cryptoprovider._blocks[0]._blockdata == assertdata
+
+    print("Encrypt:")
+    cryptoprovider.encrypt()
+    printcryptoblocks(cryptoprovider)
+    print("Decrypt:")
+    cryptoprovider.decrypt()
+    printcryptoblocks(cryptoprovider)
+    assert cryptoprovider.getcipher() == ba
 
     print("Rijndael (Rijndael): All tests passed.")
 
